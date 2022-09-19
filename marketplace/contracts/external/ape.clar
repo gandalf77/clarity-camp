@@ -1,0 +1,1 @@
+;; add relationships to Clarinet.toml
