@@ -9,7 +9,7 @@
 (define-constant ERR_NOT_TOKEN_OWNER (err u102))
 
 (define-data-var last-token-id uint u0)
-(define-data-var base-uri (string-ascii 100) "storageapi.fleek.co/87ae85d306af5-94fc-620cfc39f293-bucket/nft-example/another-ape") ;; points to the IPFS root
+(define-data-var base-uri (string-ascii 100) "storageapi.fleek.co/87ae85d306af5-94fc-620cfc39f293-bucket/nft-example/another_ape.json") ;; points to the IPFS root
 
 (define-read-only (get-last-token-id) 
   (ok (var-get last-token-id))
