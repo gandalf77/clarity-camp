@@ -7,7 +7,10 @@ requirements = []
 boot_contracts = ["pox", "costs-v2", "bns"]
 
 [project.cache_location]
-path = "./.requirements"
+path = ".requirements"
+[contracts.smart-claimant]
+path = "contracts/smart-claimant.clar"
+
 [contracts.timelocked-wallet]
 path = "contracts/timelocked-wallet.clar"
 
