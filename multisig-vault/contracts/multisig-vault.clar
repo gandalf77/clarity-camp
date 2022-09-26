@@ -14,6 +14,12 @@
 (define-data-var votes-required uint u1)
 (define-map votes {member: principal, recipient: principal} {decision: bool})
 
+
+;; Private functions
+(define-private (tally (member principal) (accumulator uint))
+  (if (get-vote member tx-sender) (+ accumulator u1) accumulator)
+)
+
 ;; Public functions
 (define-public (start (new-members (list 100 principal)) (new-votes-required uint))
   (begin
@@ -31,4 +37,29 @@
     (asserts! (is-some (index-of (var-get members) tx-sender)) err-not-a-member)
     (ok (map-set votes {member: tx-sender, recipient: recipient} {decision: decision}))
   )
+)
+
+(define-public (withdraw)
+  (let
+    (
+      (recipient tx-sender)
+      (total-votes (tally-votes))
+    )
+    (asserts! (>= total-votes (var-get votes-required)) err-votes-required-not-met)
+    (try! (as-contract (stx-transfer? (stx-get-balance tx-sender) tx-sender recipient)))
+    (ok total-votes)
+  )
+)
+
+(define-public (deposit (amount uint))
+  (stx-transfer? amount tx-sender (as-contract tx-sender))
+)
+
+;; Read-only functions
+(define-read-only (get-vote (member principal) (recipient principal))
+  (default-to false (get decision (map-get? votes {member: member, recipient: recipient})))
+)
+
+(define-read-only (tally-votes)
+  (fold tally (var-get members) u0)
 )
