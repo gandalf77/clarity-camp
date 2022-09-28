@@ -86,3 +86,94 @@ Clarinet.test({
         startBlock.receipts[0].result.expectErr().expectUint(102);
     }
 });
+
+// Testing vote
+
+Clarinet.test({
+    name: "Allows members to vote",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const { memberAccounts, deployer } = initContract({ chain, accounts });
+        const votes = memberAccounts.map(account => Tx.contractCall(contractName, 'vote', [types.principal(deployer.address), types.bool(true)], account.address));
+        const block = chain.mineBlock(votes);
+        block.receipts.map(receipt => receipt.result.expectOk().expectBool(true));
+    }
+});
+ 
+Clarinet.test({
+    name: "Does not allow non-members to vote",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const { nonMemberAccounts, deployer } = initContract({ chain, accounts });
+        const votes = nonMemberAccounts.map(account => Tx.contractCall(contractName, 'vote', [types.principal(deployer.address), types.bool(true)], account.address));
+        const block = chain.mineBlock(votes);
+        block.receipts.map(receipt => receipt.result.expectErr().expectUint(103));
+    }
+});
+
+// Testing get-vote
+
+Clarinet.test({
+    name: "Can retrieve a member's vote for a principal",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const { memberAccounts, deployer } = initContract({ chain, accounts });
+        const [memberA] = memberAccounts;
+        const vote = types.bool(true);
+        chain.mineBlock([
+            Tx.contractCall(contractName, 'vote', [types.principal(deployer.address), vote], memberA.address)
+        ]);
+        const receipt = chain.callReadOnlyFn(contractName, 'get-vote', [types.principal(memberA.address), types.principal(deployer.address)], memberA.address);
+        receipt.result.expectBool(true);
+    }
+});
+
+// Testing withdraw
+
+Clarinet.test({
+    name: "Principal that meets the vote threshold can withdraw the vault balance",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const { contractPrincipal, memberAccounts } = initContract({ chain, accounts });
+        const recipient = memberAccounts.shift()!;
+        const votes = memberAccounts.map(account => Tx.contractCall(contractName, 'vote', [types.principal(recipient.address), types.bool(true)], account.address));
+        chain.mineBlock(votes);
+        const block = chain.mineBlock([
+            Tx.contractCall(contractName, 'withdraw', [], recipient.address)
+        ]);
+        block.receipts[0].result.expectOk().expectUint(votes.length);
+        block.receipts[0].events.expectSTXTransferEvent(defaultStxVaultAmount, contractPrincipal, recipient.address);
+    }
+});
+ 
+Clarinet.test({
+    name: "Principals that do not meet the vote threshold cannot withdraw the vault balance",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const { memberAccounts, nonMemberAccounts } = initContract({ chain, accounts });
+        const recipient = memberAccounts.shift()!;
+        const [nonMemberA] = nonMemberAccounts;
+        const votes = memberAccounts.slice(0, defaultVotesRequired - 1).map(account => Tx.contractCall(contractName, 'vote', [types.principal(recipient.address), types.bool(true)], account.address));
+        chain.mineBlock(votes);
+        const block = chain.mineBlock([
+            Tx.contractCall(contractName, 'withdraw', [], recipient.address),
+            Tx.contractCall(contractName, 'withdraw', [], nonMemberA.address)
+        ]);
+        block.receipts.map(receipt => receipt.result.expectErr().expectUint(104));
+    }
+});
+
+// Testing changing-votes
+
+Clarinet.test({
+    name: "Members can change votes at-will, thus making an eligible recipient uneligible again",
+    async fn(chain: Chain, accounts: Map<string, Account>) {
+        const { memberAccounts } = initContract({ chain, accounts });
+        const recipient = memberAccounts.shift()!;
+        const votes = memberAccounts.map(account => Tx.contractCall(contractName, 'vote', [types.principal(recipient.address), types.bool(true)], account.address));
+        chain.mineBlock(votes);
+        const receipt = chain.callReadOnlyFn(contractName, 'tally-votes', [], recipient.address);
+        receipt.result.expectUint(votes.length);
+        const block = chain.mineBlock([
+            Tx.contractCall(contractName, 'vote', [types.principal(recipient.address), types.bool(false)], memberAccounts[0].address),
+            Tx.contractCall(contractName, 'withdraw', [], recipient.address),
+        ]);
+        block.receipts[0].result.expectOk().expectBool(true);
+        block.receipts[1].result.expectErr().expectUint(104);
+    }
+});
